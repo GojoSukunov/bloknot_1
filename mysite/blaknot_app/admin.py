@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User,Goals,Category,Tasks,Note,Habits
+from .models import User,Deal,Tasks,Note
 
 
 
@@ -9,9 +9,7 @@ class NoteInline(admin.TabularInline):
 class GoalsAdmin(admin.ModelAdmin):
     inlines = [NoteInline]
 admin.site.register(User)
-admin.site.register(Goals,GoalsAdmin)
-admin.site.register(Category)
+admin.site.register(Deal,GoalsAdmin)
 admin.site.register(Tasks)
-admin.site.register(Habits)
 
 

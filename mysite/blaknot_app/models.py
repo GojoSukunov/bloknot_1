@@ -18,27 +18,20 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-
-class Category(models.Model):
-    title_category=models.CharField(max_length=100)
-    def __str__(self):
-        return self.title_category
-
-
-class Goals(models.Model):
-    user=models.ForeignKey(User,on_delete=models.CASCADE)
-    category=models.ForeignKey(Category,on_delete=models.CASCADE)
-    title_goals=models.CharField(max_length=100)
+class Deal(models.Model):
+    owner=models.ForeignKey(User,on_delete=models.CASCADE)
+    title_deal=models.CharField(max_length=100)
     description=models.TextField()
     status=models.CharField(max_length=10,choices=STATUS_CHOICE,default='active')
-    now_date = models.DateField(auto_now_add=True)
-    goals_date = models.DateField()
+    created_at=models.DateField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deadline = models.DateField(null=True, blank=True)
 
     def __str__(self):
-        return f'{self.category}:{self.title_goals}'
+        return self.title_deal
 
 class Tasks(models.Model):
-    goals=models.ForeignKey(Goals,on_delete=models.CASCADE)
+    deal=models.ForeignKey(Deal,on_delete=models.CASCADE)
     title_task=models.CharField(max_length=100)
     description=models.TextField()
 
@@ -46,26 +39,13 @@ class Tasks(models.Model):
         return self.title_task
 
 class Note(models.Model):
-    goals=models.ForeignKey(Goals,on_delete=models.CASCADE,related_name='note')
+    deal=models.ForeignKey(Deal,on_delete=models.CASCADE,related_name='note')
     title_note=models.CharField(max_length=100)
     description=models.TextField(null=True,blank=True)
     date_note=models.DateField(auto_now_add=True)
 
     def __str__(self):
         return self.title_note
-
-class Habits(models.Model):
-    category=models.ForeignKey(Category,on_delete=models.CASCADE)
-    user=models.ForeignKey(User,on_delete=models.CASCADE)
-    title_habit=models.CharField(max_length=100)
-    STATUS_CHOICE_HABIT=(
-    ('done','done'),
-    ('not done','not done')
-    )
-    status=models.CharField(max_length=8,null=True,blank=True,choices=STATUS_CHOICE_HABIT,default='not done')
-
-    def __str__(self):
-        return self.title_habit
 
 
 
