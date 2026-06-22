@@ -29,7 +29,7 @@ class DealDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model=Deal
         fields=['id','owner', 'title_deal',
-                'description','status','cash','created_at','updated_at','deadline','note_detail']
+                'description','status','cash','created_at','updated_at','note_detail']
         read_only_fields = ['owner']
 
 
