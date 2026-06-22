@@ -18,7 +18,7 @@ class DealListViewSet(generics.ListCreateAPIView):
     queryset =Deal.objects.all()
     serializer_class = DealListSerializer
     filter_backends = [SearchFilter,OrderingFilter,DjangoFilterBackend]
-    search_fields=['title_deal','status','now_date']
+    search_fields=['title_deal','status','created_at']
     ordering_fields=['created_at']
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -26,6 +26,9 @@ class DealListViewSet(generics.ListCreateAPIView):
         serializer.save(owner=self.request.user)
 
     def get_queryset(self):
+        if self.request.user.is_anonymous:
+            return Deal.objects.none()
+
         return Deal.objects.filter(owner=self.request.user)
 
 class DealDetailViewSet(generics.RetrieveUpdateDestroyAPIView):

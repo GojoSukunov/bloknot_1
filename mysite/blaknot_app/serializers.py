@@ -29,7 +29,7 @@ class DealDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model=Deal
         fields=['id','owner', 'title_deal',
-                'description','status','created_at','updated_at','deadline','note_detail']
+                'description','status','cash','created_at','updated_at','deadline','note_detail']
         read_only_fields = ['owner']
 
 
@@ -39,5 +39,5 @@ class TasksSerializer(serializers.ModelSerializer):
     deal_detail=DealDetailSerializer(read_only=True)
     class Meta:
         model=Tasks
-        fields=['id','title_task','description','deal_detail']
+        fields=['id','status','title_task','created_at','owner','description','deal_detail','level']
 
