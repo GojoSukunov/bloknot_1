@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 
 
 class RegisterView(generics.CreateAPIView):
@@ -83,13 +84,19 @@ class NoteViewSet(viewsets.ModelViewSet):
     serializer_class = NoteSerializer
     permission_classes = [permissions.IsAuthenticated,CheckOwner]
 
+    def get_queryset(self):
+        return Note.objects.filter(deal__owner=self.request.user)
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
-
+        if serializer.validated_data['deal'].owner != self.request.user:
+            raise PermissionDenied('Нельзя добавлять заметки в чужое дело')
+        serializer.save()
 class TasksViewSet(viewsets.ModelViewSet):
     queryset =Tasks.objects.all()
     serializer_class =TasksSerializer
     permission_classes = [permissions.IsAuthenticated,CheckOwner]
+
+    def get_queryset(self):
+        return Tasks.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
