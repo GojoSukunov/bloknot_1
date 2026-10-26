@@ -1,0 +1,98 @@
+# Наружу опубликован ТОЛЬКО nginx (80/443). БД, API и фронт доступны лишь внутри docker-сети.
+name: bloknot
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bloknot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-bloknot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DEBUG: "0"
+      SECRET_KEY: ${SECRET_KEY:?задайте SECRET_KEY в .env}
+      ALLOWED_HOSTS: ${DOMAIN:?задайте DOMAIN в .env},backend
+      CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      ADMIN_URL: ${ADMIN_URL:?задайте ADMIN_URL в .env}
+      DATABASE_URL: postgres://${POSTGRES_USER:-bloknot}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bloknot}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@localhost}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    volumes:
+      - media:/app/media
+    read_only: true
+    tmpfs: ["/tmp", "/dev/shm"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://backend:8000/healthz/', timeout=4)"]
+      interval: 20s
+      timeout: 6s
+      retries: 5
+      start_period: 40s
+    logging: *logging
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    environment:
+      BLOKNOT_API_URL: http://backend:8000
+      BLOKNOT_PUBLIC_URL: https://${DOMAIN}
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4)"]
+      interval: 20s
+      timeout: 6s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  nginx:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend: { condition: service_healthy }
+    environment:
+      DOMAIN: ${DOMAIN}
+      ADMIN_URL: ${ADMIN_URL}
+      NGINX_ENVSUBST_FILTER: ^(DOMAIN|ADMIN_URL)$$
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/nginx/security_headers.conf:/etc/nginx/snippets/security_headers.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - media:/media:ro
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+volumes:
+  pgdata:
+  media:

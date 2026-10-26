@@ -1,0 +1,99 @@
+server_tokens off;
+client_max_body_size 3m;
+client_body_timeout 15s;
+client_header_timeout 15s;
+keepalive_timeout 30s;
+
+limit_req_zone $binary_remote_addr zone=general:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+limit_req_status 429;
+limit_conn_zone $binary_remote_addr zone=perip:10m;
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# Любые обращения по IP / чужому домену — отбрасываем
+server {
+    listen 80 default_server;
+    return 444;
+}
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    limit_conn perip 50;
+    include /etc/nginx/snippets/security_headers.conf;
+
+    # Скрытые файлы никому не отдаём
+    location ~ /\.(?!well-known) { deny all; }
+
+    # Фото профилей: только как неисполняемые файлы
+    location /media/ {
+        alias /media/;
+        autoindex off;
+        expires 7d;
+        include /etc/nginx/snippets/security_headers.conf;
+        add_header Content-Security-Policy "default-src 'none'; sandbox" always;
+    }
+
+    # Админка Django — по секретному пути. Для максимальной защиты ограничьте по IP:
+    #   allow 203.0.113.10;   # ваш IP
+    #   deny all;
+    location /${ADMIN_URL}/ {
+        limit_req zone=admin burst=10 nodelay;
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        include /etc/nginx/snippets/security_headers.conf;
+        add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; form-action 'self'" always;
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Статика админки (whitenoise внутри backend)
+    location /static/ {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        include /etc/nginx/snippets/security_headers.conf;
+    }
+
+    # Всё остальное — Streamlit-приложение. API (/api/) наружу НЕ публикуется.
+    location / {
+        limit_req zone=general burst=60 nodelay;
+        proxy_pass http://frontend:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 3600s;
+        proxy_buffering off;
+        include /etc/nginx/snippets/security_headers.conf;
+    }
+}

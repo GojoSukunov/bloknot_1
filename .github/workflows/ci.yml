@@ -1,0 +1,23 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements.txt pip-audit
+      - run: python manage.py makemigrations --check --dry-run
+        env: { DEBUG: "1" }
+      - run: python manage.py test
+      - run: pip-audit -r requirements.txt
+      - name: check --deploy
+        run: python manage.py check --deploy --fail-level WARNING
+        env:
+          SECRET_KEY: ci-secret-key-ci-secret-key-ci-secret-key-ci-secret-key-1234567890
+          ALLOWED_HOSTS: example.com
+          ADMIN_URL: ci-admin
+          DATABASE_URL: postgres://u:p@localhost/db
+          CSRF_TRUSTED_ORIGINS: https://example.com
